@@ -1,0 +1,38 @@
+[tool.black]
+line-length = 120
+target-version = ["py312"]
+
+[tool.isort]
+line_length = 120
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = [
+    "tests",
+]
+
+[tool.poetry]
+name = "pubchempy2"
+version = "0.1.0"
+description = "A simple Python wrapper around the PubChem PUG REST API."
+authors = ["Dmitry Brezgunov <brezgunov.dmitri@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pandas = {version = "^2.2.0", optional = true}
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+coverage = "^7.4.1"
+flake8 = "^7.0.0"
+black = "^24.1.1"
+isort = "^5.13.2"
+
+[tool.poetry.extras]
+pandas = ["pandas"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
