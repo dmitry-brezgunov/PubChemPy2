@@ -245,7 +245,7 @@ def request(identifier, namespace="cid", domain="compound", operation=None, outp
     try:
         log.debug("Request URL: %s", apiurl)
         log.debug("Request data: %s", postdata)
-        response = requests.post(url=apiurl, data=postdata, timeout=5)
+        response = requests.post(url=apiurl, data=postdata, timeout=10)
         response.raise_for_status()
         return response
     except HTTPError as e:
