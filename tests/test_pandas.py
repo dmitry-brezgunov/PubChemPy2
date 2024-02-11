@@ -10,8 +10,15 @@ import logging
 
 import pytest
 
-from pubchempy2.pubchempy import (Compound, Substance, compounds_to_frame, get_compounds, get_properties,
-                                  get_substances, substances_to_frame)
+from pubchempy2.pubchempy import (
+    Compound,
+    Substance,
+    compounds_to_frame,
+    get_compounds,
+    get_properties,
+    get_substances,
+    substances_to_frame,
+)
 
 log = logging.getLogger(__name__)
 
