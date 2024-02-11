@@ -3,6 +3,7 @@ line-length = 120
 target-version = ["py312"]
 
 [tool.isort]
+profile = "black"
 line_length = 120
 
 [tool.pytest.ini_options]
@@ -22,6 +23,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.12"
 pandas = {version = "^2.2.0", optional = true}
+requests = "^2.31.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

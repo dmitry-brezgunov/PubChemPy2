@@ -5,15 +5,15 @@ Python interface for the PubChem PUG REST service.
 """
 
 import functools
-import json
 import logging
 import os
 import time
 import warnings
 from itertools import zip_longest
-from urllib.error import HTTPError
-from urllib.parse import quote, urlencode
-from urllib.request import urlopen
+from urllib.parse import quote
+
+import requests
+from requests.exceptions import HTTPError
 
 API_BASE = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
 
@@ -225,7 +225,7 @@ def request(identifier, namespace="cid", domain="compound", operation=None, outp
     # Filter None values from kwargs
     kwargs = dict((k, v) for k, v in kwargs.items() if v is not None)
     # Build API URL
-    urlid, postdata = None, None
+    urlid, postdata = "", {}
     if namespace == "sourceid":
         identifier = identifier.replace("/", ".")
     if (
@@ -234,18 +234,19 @@ def request(identifier, namespace="cid", domain="compound", operation=None, outp
         or (searchtype and namespace == "cid")
         or domain == "sources"
     ):
-        urlid = quote(identifier.encode("utf8"))
+        urlid = quote(identifier)
     else:
-        postdata = urlencode([(namespace, identifier)]).encode("utf8")
+        postdata = {namespace: identifier}
     comps = filter(None, [API_BASE, domain, searchtype, namespace, urlid, operation, output])
     apiurl = "/".join(comps)
     if kwargs:
-        apiurl += "?%s" % urlencode(kwargs)
+        postdata |= kwargs
     # Make request
     try:
         log.debug("Request URL: %s", apiurl)
         log.debug("Request data: %s", postdata)
-        response = urlopen(apiurl, postdata)
+        response = requests.post(url=apiurl, data=postdata, timeout=5)
+        response.raise_for_status()
         return response
     except HTTPError as e:
         raise PubChemHTTPError(e)
@@ -254,26 +255,26 @@ def request(identifier, namespace="cid", domain="compound", operation=None, outp
 def get(identifier, namespace="cid", domain="compound", operation=None, output="JSON", searchtype=None, **kwargs):
     """Request wrapper that automatically handles async requests."""
     if (searchtype and searchtype != "xref") or namespace in ["formula"]:
-        response = request(identifier, namespace, domain, None, "JSON", searchtype, **kwargs).read()
-        status = json.loads(response.decode())
+        response = request(identifier, namespace, domain, None, "JSON", searchtype, **kwargs)
+        status = response.json()
         if "Waiting" in status and "ListKey" in status["Waiting"]:
             identifier = status["Waiting"]["ListKey"]
             namespace = "listkey"
             while "Waiting" in status and "ListKey" in status["Waiting"]:
                 time.sleep(2)
-                response = request(identifier, namespace, domain, operation, "JSON", **kwargs).read()
-                status = json.loads(response.decode())
+                response = request(identifier, namespace, domain, operation, "JSON", **kwargs)
+                status = response.json()
             if not output == "JSON":
-                response = request(identifier, namespace, domain, operation, output, searchtype, **kwargs).read()
+                response = request(identifier, namespace, domain, operation, output, searchtype, **kwargs)
     else:
-        response = request(identifier, namespace, domain, operation, output, searchtype, **kwargs).read()
+        response = request(identifier, namespace, domain, operation, output, searchtype, **kwargs)
     return response
 
 
 def get_json(identifier, namespace="cid", domain="compound", operation=None, searchtype=None, **kwargs):
     """Request wrapper that automatically parses JSON response and supresses NotFoundError."""
     try:
-        return json.loads(get(identifier, namespace, domain, operation, "JSON", searchtype, **kwargs).decode())
+        return get(identifier, namespace, domain, operation, "JSON", searchtype, **kwargs).json()
     except NotFoundError as e:
         log.info(e)
         return None
@@ -282,7 +283,7 @@ def get_json(identifier, namespace="cid", domain="compound", operation=None, sea
 def get_sdf(identifier, namespace="cid", domain="compound", operation=None, searchtype=None, **kwargs):
     """Request wrapper that automatically parses SDF response and supresses NotFoundError."""
     try:
-        return get(identifier, namespace, domain, operation, "SDF", searchtype, **kwargs).decode()
+        return get(identifier, namespace, domain, operation, "SDF", searchtype, **kwargs).json()
     except NotFoundError as e:
         log.info(e)
         return None
@@ -432,7 +433,7 @@ def get_aids(identifier, namespace="cid", domain="compound", searchtype=None, **
 
 def get_all_sources(domain="substance"):
     """Return a list of all current depositors of substances or assays."""
-    results = json.loads(get(domain, None, "sources").decode())
+    results = get(domain, None, "sources").json()
     return results["InformationList"]["SourceName"]
 
 
@@ -452,7 +453,7 @@ def download(
     if not overwrite and os.path.isfile(path):
         raise IOError("%s already exists. Use 'overwrite=True' to overwrite it." % path)
     with open(path, "wb") as f:
-        f.write(response)
+        f.write(response.content)
 
 
 def memoized_property(fget):
@@ -729,7 +730,7 @@ class Compound(object):
 
         :param int cid: The PubChem Compound Identifier (CID).
         """
-        record = json.loads(request(cid, **kwargs).read().decode())["PC_Compounds"][0]
+        record = request(cid, **kwargs).json()["PC_Compounds"][0]
         return cls(record)
 
     def __repr__(self):
@@ -1059,7 +1060,7 @@ class Substance(object):
 
         :param int sid: The PubChem Substance Identifier (SID).
         """
-        record = json.loads(request(sid, "sid", "substance").read().decode())["PC_Substances"][0]
+        record = request(sid, "sid", "substance").json()["PC_Substances"][0]
         return cls(record)
 
     def __init__(self, record):
@@ -1173,7 +1174,7 @@ class Assay(object):
 
         :param int aid: The PubChem Assay Identifier (AID).
         """
-        record = json.loads(request(aid, "aid", "assay", "description").read().decode())["PC_AssayContainer"][0]
+        record = request(aid, "aid", "assay", "description").json()["PC_AssayContainer"][0]
         return cls(record)
 
     def __init__(self, record):
@@ -1304,10 +1305,10 @@ class PubChemHTTPError(PubChemPyError):
     """Generic error class to handle all HTTP error codes."""
 
     def __init__(self, e):
-        self.code = e.code
-        self.msg = e.reason
+        self.code = e.response.status_code
+        self.msg = e.response.reason
         try:
-            self.msg += ": %s" % json.loads(e.read().decode())["Fault"]["Details"][0]
+            self.msg += ": %s" % e.response.json()["Fault"]["Details"][0]
         except (ValueError, IndexError, KeyError):
             pass
         if self.code == 400:
@@ -1370,7 +1371,3 @@ class ServerError(PubChemHTTPError):
 
     def __init__(self, msg="Some problem on the server side"):
         self.msg = msg
-
-
-if __name__ == "__main__":
-    print(get_properties(["isomeric_smiles", "xlogp", "inchikey"], "1,2,3,4", "cid", as_dataframe=True))
