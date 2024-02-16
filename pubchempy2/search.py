@@ -1,21 +1,21 @@
-from typing import Annotated, Literal, Optional, get_args
+from typing import Literal, Optional, get_args
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import model_validator
 
-from .types import assay_types, compound_property_types, fast_search_types, output_types, xref_types, xrefs_types
+from .abstract import AbstractSearch
+from .types import assay_types, compound_property_types, fast_search_types, xref_types, xrefs_types
+from .validators import XrefValidators
 
 
-class SubstanceSearch(BaseModel):
+class SubstanceSearch(AbstractSearch, XrefValidators):
     domain: Literal["substance"] = "substance"
     namespace: Literal["sid", "sourceid", "sourceall", "name", "xref", "listkey"]
     sourceid: str = None
     xref: Optional[xref_types] = None
-    identifiers: Annotated[list[str | int], Field(min_length=1)]
     operation: Literal["record", "synonyms", "sids", "cids", "aids", "assaysummary", "classification", "xrefs"] = (
         "record"
     )
     xrefs: Optional[list[xref_types | xrefs_types]] = None
-    output: output_types
 
     @model_validator(mode="after")
     def check_sourceid(self) -> "SubstanceSearch":
@@ -25,31 +25,14 @@ class SubstanceSearch(BaseModel):
             raise ValueError("sourceid must be None")
         return self
 
-    @model_validator(mode="after")
-    def check_xref(self) -> "SubstanceSearch":
-        if self.namespace == "xref" and self.xref is None:
-            raise ValueError("xref must be specified")
-        if self.namespace != "xref" and self.xref:
-            raise ValueError("xref must be None")
-        return self
 
-    @model_validator(mode="after")
-    def check_xrefs(self) -> "SubstanceSearch":
-        if self.operation == "xrefs" and self.xrefs is None:
-            raise ValueError("xrefs must be specified")
-        if self.operation != "xrefs" and self.xrefs:
-            raise ValueError("xrefs must be None")
-        return self
-
-
-class CompoundSearch(BaseModel):
+class CompoundSearch(AbstractSearch, XrefValidators):
     domain: Literal["compound"] = "compound"
     namespace: (
         Literal["cid", "name", "smiles", "inchi", "sdf", "inchikey", "formula", "xref", "listkey"] | fast_search_types
     )
     fast_search: Optional[Literal["smiles", "smarts", "inchi", "sdf", "cid"]] = None
     xref: Optional[xref_types] = None
-    identifiers: Annotated[list[str | int], Field(min_length=1)]
     operation: Literal[
         "record",
         "property",
@@ -65,7 +48,6 @@ class CompoundSearch(BaseModel):
     ] = "record"
     compound_property: Optional[list[compound_property_types]] = None
     xrefs: Optional[list[xref_types | xrefs_types]] = None
-    output: output_types
 
     @model_validator(mode="after")
     def check_fast_search(self) -> "CompoundSearch":
@@ -77,14 +59,6 @@ class CompoundSearch(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def check_xref(self) -> "CompoundSearch":
-        if self.namespace == "xref" and self.xref is None:
-            raise ValueError("xref must be specified")
-        if self.namespace != "xref" and self.xref:
-            raise ValueError("xref must be None")
-        return self
-
-    @model_validator(mode="after")
     def check_compound_property(self) -> "CompoundSearch":
         if self.operation == "property" and self.compound_property is None:
             raise ValueError("compound_property must be specified")
@@ -92,20 +66,11 @@ class CompoundSearch(BaseModel):
             raise ValueError("compound_property must be None")
         return self
 
-    @model_validator(mode="after")
-    def check_xrefs(self) -> "CompoundSearch":
-        if self.operation == "xrefs" and self.xrefs is None:
-            raise ValueError("xrefs must be specified")
-        if self.operation != "xrefs" and self.xrefs:
-            raise ValueError("xrefs must be None")
-        return self
 
-
-class AssaySearch(BaseModel):
+class AssaySearch(AbstractSearch):
     domain: Literal["assay"] = "assay"
     namespace: Literal["aid", "listkey", "type", "sourceall", "target", "activity"]
     target: Optional[Literal["gi", "proteinname", "geneid", "genesymbol", "accession"]] = None
-    identifiers: Annotated[list[str | int], Field(min_length=1)]
     operation: Literal[
         "record",
         "concise",
@@ -119,7 +84,6 @@ class AssaySearch(BaseModel):
         "classification",
     ] = "record"
     targets: Optional[list[Literal["ProteinGI", "ProteinName", "GeneID", "GeneSymbol"]]] = None
-    output: output_types
 
     @model_validator(mode="after")
     def check_type(self) -> "AssaySearch":
