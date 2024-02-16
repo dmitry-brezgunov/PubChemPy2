@@ -1,4 +1,5 @@
 from typing import Literal, Optional, get_args
+from urllib.parse import quote
 
 from pydantic import model_validator
 
@@ -24,6 +25,35 @@ class SubstanceSearch(AbstractSearch, XrefValidators):
         if self.namespace != "sourceid" and self.sourceid:
             raise ValueError("sourceid must be None")
         return self
+
+    def _construct_input(self) -> str:
+        input_part = f"{self.domain}/{self.namespace}"
+        if self.namespace == "sourceid":
+            input_part += f"/{quote(self.sourceid).replace('/', '.')}"
+        if self.namespace == "sourceall":
+            input_part += f"/{quote(str(self.identifiers[0])).replace('/', '.')}"
+        if self.namespace == "xref":
+            input_part += f"/{self.xref}/{str(self.identifiers[0])}"
+        if self.namespace == "listkey":
+            input_part += f"/{str(self.identifiers[0])}"
+        return input_part
+
+    def _construct_operation(self) -> str:
+        operation_part = f"{self.operation}"
+        if self.operation == "xrefs":
+            operation_part += f"/{','.join(self.xrefs)}"
+        return operation_part
+
+    def construct_search_request(self) -> dict[str, str]:
+        input_part = self._construct_input()
+        operation_part = self._construct_operation()
+        uri = f"{self.prolog}/{input_part}/{operation_part}/{self.output}"
+        body = {}
+
+        if self.namespace not in ("sourceall", "xref", "listkey"):
+            body |= {self.namespace: ",".join([str(val) for val in self.identifiers])}
+
+        return {"uri": uri, "body": body}
 
 
 class CompoundSearch(AbstractSearch, XrefValidators):
