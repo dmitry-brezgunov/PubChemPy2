@@ -23,7 +23,7 @@ class XrefValidators:
 
     @model_validator(mode="after")
     def check_xrefs(self: XrefProto) -> "AbstractSearch":
-        if self.operation == "xrefs" and self.xrefs is None:
+        if self.operation == "xrefs" and not self.xrefs:
             raise ValueError("xrefs must be specified")
         if self.operation != "xrefs" and self.xrefs:
             raise ValueError("xrefs must be None")
