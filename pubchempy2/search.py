@@ -1,10 +1,10 @@
-from typing import Literal, Optional, get_args
+from typing import Literal, Optional
 from urllib.parse import quote
 
 from pydantic import model_validator
 
 from .abstract import AbstractSearch
-from .types import assay_types, compound_property_types, fast_search_types, xref_types, xrefs_types
+from .types import assay_types, compound_property_types, fast_search_args, fast_search_types, xref_types, xrefs_types
 from .validators import XrefValidators
 
 
@@ -59,9 +59,9 @@ class SubstanceSearch(AbstractSearch, XrefValidators):
 class CompoundSearch(AbstractSearch, XrefValidators):
     domain: Literal["compound"] = "compound"
     namespace: (
-        Literal["cid", "name", "smiles", "inchi", "sdf", "inchikey", "formula", "xref", "listkey"] | fast_search_types
+        Literal["cid", "name", "smiles", "inchi", "inchikey", "fastformula", "xref", "listkey"] | fast_search_types
     )
-    fast_search: Optional[Literal["smiles", "smarts", "inchi", "sdf", "cid"]] = None
+    fast_search: Optional[Literal["smiles", "smarts", "inchi", "cid"]] = None
     xref: Optional[xref_types] = None
     operation: Literal[
         "record",
@@ -81,7 +81,6 @@ class CompoundSearch(AbstractSearch, XrefValidators):
 
     @model_validator(mode="after")
     def check_fast_search(self) -> "CompoundSearch":
-        fast_search_args = get_args(fast_search_types)
         if self.namespace in fast_search_args and self.fast_search is None:
             raise ValueError("fast_search must be specified")
         if self.namespace not in fast_search_args and self.fast_search:
@@ -90,11 +89,50 @@ class CompoundSearch(AbstractSearch, XrefValidators):
 
     @model_validator(mode="after")
     def check_compound_property(self) -> "CompoundSearch":
-        if self.operation == "property" and self.compound_property is None:
+        if self.operation == "property" and not self.compound_property:
             raise ValueError("compound_property must be specified")
         if self.operation != "property" and self.compound_property:
             raise ValueError("compound_property must be None")
         return self
+
+    def _construct_input(self) -> str:
+        input_part = f"{self.domain}/{self.namespace}"
+        if self.namespace == "xref":
+            input_part += f"/{self.xref}/{str(self.identifiers[0])}"
+        if self.namespace == "listkey":
+            input_part += f"/{str(self.identifiers[0])}"
+        if self.namespace == "fastformula":
+            input_part += f"/{quote(','.join(self.identifiers))}"
+        if self.namespace in fast_search_args:
+            input_part += f"/{self.fast_search}"
+        if self.fast_search == "cid":
+            input_part += f"/{str(self.identifiers[0])}"
+        return input_part
+
+    def _construct_operation(self) -> str:
+        operation_part = f"{self.operation}"
+        if self.operation == "property":
+            operation_part += f"/{','.join(self.compound_property)}"
+        if self.operation == "xrefs":
+            operation_part += f"/{','.join(self.xrefs)}"
+        return operation_part
+
+    def construct_search_request(self) -> dict[str, str]:
+        input_part = self._construct_input()
+        operation_part = self._construct_operation()
+        uri = f"{self.prolog}/{input_part}/{operation_part}/{self.output}"
+        body = {}
+
+        if self.namespace not in ("xref", "listkey", "fastformula") and self.namespace not in fast_search_args:
+            body |= {self.namespace: ",".join([str(val) for val in self.identifiers])}
+        if self.namespace in fast_search_args and self.fast_search != "cid":
+            body |= {self.fast_search: ",".join([str(val) for val in self.identifiers])}
+        if self.namespace == "inchi":
+            body[self.namespace] = f"InChI={body[self.namespace]}"
+        if self.fast_search == "inchi":
+            body[self.fast_search] = f"InChI={body[self.fast_search]}"
+
+        return {"uri": uri, "body": body}
 
 
 class AssaySearch(AbstractSearch):
@@ -117,11 +155,10 @@ class AssaySearch(AbstractSearch):
 
     @model_validator(mode="after")
     def check_type(self) -> "AssaySearch":
-        assay_types_args = get_args(assay_types)
         if self.namespace == "type" and len(self.identifiers) != 1:
             raise ValueError("identifiers must have exactly one value")
-        if self.namespace == "type" and self.identifiers[0] not in assay_types_args:
-            raise ValueError(f"identifiers must be one of following: {assay_types_args}")
+        if self.namespace == "type" and self.identifiers[0] not in assay_types:
+            raise ValueError(f"identifiers must be one of following: {assay_types}")
         return self
 
     @model_validator(mode="after")
