@@ -28,6 +28,7 @@ class SubstanceSearch(AbstractSearch, XrefValidators):
 
     def _construct_input(self) -> str:
         input_part = f"{self.domain}/{self.namespace}"
+
         if self.namespace == "sourceid":
             input_part += f"/{quote(self.sourceid).replace('/', '.')}"
         if self.namespace == "sourceall":
@@ -36,15 +37,18 @@ class SubstanceSearch(AbstractSearch, XrefValidators):
             input_part += f"/{self.xref}/{str(self.identifiers[0])}"
         if self.namespace == "listkey":
             input_part += f"/{str(self.identifiers[0])}"
+
         return input_part
 
     def _construct_operation(self) -> str:
         operation_part = f"{self.operation}"
+
         if self.operation == "xrefs":
             operation_part += f"/{','.join(self.xrefs)}"
+
         return operation_part
 
-    def construct_search_request(self) -> dict[str, str]:
+    def _construct_search_request(self) -> dict[str, str]:
         input_part = self._construct_input()
         operation_part = self._construct_operation()
         uri = f"{self.prolog}/{input_part}/{operation_part}/{self.output}"
@@ -97,33 +101,35 @@ class CompoundSearch(AbstractSearch, XrefValidators):
 
     def _construct_input(self) -> str:
         input_part = f"{self.domain}/{self.namespace}"
+
         if self.namespace == "xref":
             input_part += f"/{self.xref}/{str(self.identifiers[0])}"
-        if self.namespace == "listkey":
+        if self.namespace == "listkey" or self.fast_search == "cid":
             input_part += f"/{str(self.identifiers[0])}"
         if self.namespace == "fastformula":
             input_part += f"/{quote(','.join(self.identifiers))}"
         if self.namespace in fast_search_args:
             input_part += f"/{self.fast_search}"
-        if self.fast_search == "cid":
-            input_part += f"/{str(self.identifiers[0])}"
+
         return input_part
 
     def _construct_operation(self) -> str:
         operation_part = f"{self.operation}"
+
         if self.operation == "property":
             operation_part += f"/{','.join(self.compound_property)}"
         if self.operation == "xrefs":
             operation_part += f"/{','.join(self.xrefs)}"
+
         return operation_part
 
-    def construct_search_request(self) -> dict[str, str]:
+    def _construct_search_request(self) -> dict[str, str]:
         input_part = self._construct_input()
         operation_part = self._construct_operation()
         uri = f"{self.prolog}/{input_part}/{operation_part}/{self.output}"
         body = {}
 
-        if self.namespace not in ("xref", "listkey", "fastformula") and self.namespace not in fast_search_args:
+        if self.namespace not in ("xref", "listkey", "fastformula", *fast_search_args):
             body |= {self.namespace: ",".join([str(val) for val in self.identifiers])}
         if self.namespace in fast_search_args and self.fast_search != "cid":
             body |= {self.fast_search: ",".join([str(val) for val in self.identifiers])}
@@ -176,3 +182,34 @@ class AssaySearch(AbstractSearch):
         if self.operation != "targets" and self.targets:
             raise ValueError("targets must be None")
         return self
+
+    def _construct_input(self) -> str:
+        input_part = f"{self.domain}/{self.namespace}"
+
+        if self.namespace in ("listkey", "type"):
+            input_part += f"/{str(self.identifiers[0])}"
+        if self.namespace in ("sourceall", "activity"):
+            input_part += f"/{quote(str(self.identifiers[0])).replace('/', '.')}"
+        if self.namespace == "target":
+            input_part += f"/{self.target}"
+
+        return input_part
+
+    def _construct_operation(self) -> str:
+        operation_part = f"{self.operation}"
+        if self.operation == "targets":
+            operation_part += f"/{','.join(self.targets)}"
+        return operation_part
+
+    def _construct_search_request(self) -> dict[str, str]:
+        input_part = self._construct_input()
+        operation_part = self._construct_operation()
+        uri = f"{self.prolog}/{input_part}/{operation_part}/{self.output}"
+        body = {}
+
+        if self.namespace == "aid":
+            body |= {self.namespace: ",".join([str(val) for val in self.identifiers])}
+        if self.namespace == "target":
+            body |= {self.target: str(self.identifiers[0])}
+
+        return {"uri": uri, "body": body}

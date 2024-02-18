@@ -23,5 +23,5 @@ class AbstractSearch(BaseModel, ABC):
         pass
 
     @abstractclassmethod
-    def construct_search_request(self) -> dict[str, str]:
+    def _construct_search_request(self) -> dict[str, str]:
         pass
