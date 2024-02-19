@@ -3,7 +3,7 @@ from urllib.parse import quote
 
 from pydantic import model_validator
 
-from .abstract import AbstractSearch
+from .abstract import AbstractSearch, SearchParams
 from .types import assay_types, compound_property_types, fast_search_args, fast_search_types, xref_types, xrefs_types
 from .validators import XrefValidators
 
@@ -48,7 +48,7 @@ class SubstanceSearch(AbstractSearch, XrefValidators):
 
         return operation_part
 
-    def _construct_search_request(self) -> dict[str, str]:
+    def _construct_search_request(self) -> SearchParams:
         input_part = self._construct_input()
         operation_part = self._construct_operation()
         uri = f"{self.prolog}/{input_part}/{operation_part}/{self.output}"
@@ -57,7 +57,7 @@ class SubstanceSearch(AbstractSearch, XrefValidators):
         if self.namespace not in ("sourceall", "xref", "listkey"):
             body |= {self.namespace: ",".join([str(val) for val in self.identifiers])}
 
-        return {"uri": uri, "body": body}
+        return SearchParams(uri=uri, body=body)
 
 
 class CompoundSearch(AbstractSearch, XrefValidators):
@@ -123,7 +123,7 @@ class CompoundSearch(AbstractSearch, XrefValidators):
 
         return operation_part
 
-    def _construct_search_request(self) -> dict[str, str]:
+    def _construct_search_request(self) -> SearchParams:
         input_part = self._construct_input()
         operation_part = self._construct_operation()
         uri = f"{self.prolog}/{input_part}/{operation_part}/{self.output}"
@@ -138,7 +138,7 @@ class CompoundSearch(AbstractSearch, XrefValidators):
         if self.fast_search == "inchi":
             body[self.fast_search] = f"InChI={body[self.fast_search]}"
 
-        return {"uri": uri, "body": body}
+        return SearchParams(uri=uri, body=body)
 
 
 class AssaySearch(AbstractSearch):
@@ -201,7 +201,7 @@ class AssaySearch(AbstractSearch):
             operation_part += f"/{','.join(self.targets)}"
         return operation_part
 
-    def _construct_search_request(self) -> dict[str, str]:
+    def _construct_search_request(self) -> SearchParams:
         input_part = self._construct_input()
         operation_part = self._construct_operation()
         uri = f"{self.prolog}/{input_part}/{operation_part}/{self.output}"
@@ -212,4 +212,4 @@ class AssaySearch(AbstractSearch):
         if self.namespace == "target":
             body |= {self.target: str(self.identifiers[0])}
 
-        return {"uri": uri, "body": body}
+        return SearchParams(uri=uri, body=body)

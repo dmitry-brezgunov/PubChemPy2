@@ -1,9 +1,16 @@
 from abc import ABC, abstractclassmethod
 from typing import Annotated, ClassVar
 
-from pydantic import BaseModel, Field
+import requests
+from pydantic import BaseModel, Field, HttpUrl
 
+from .errors import handle_http_error
 from .types import output_types
+
+
+class SearchParams(BaseModel):
+    uri: HttpUrl
+    body: dict[str, str]
 
 
 class AbstractSearch(BaseModel, ABC):
@@ -23,5 +30,14 @@ class AbstractSearch(BaseModel, ABC):
         pass
 
     @abstractclassmethod
-    def _construct_search_request(self) -> dict[str, str]:
+    def _construct_search_request(self) -> SearchParams:
         pass
+
+    def search(self) -> requests.Response:
+        search_request = self._construct_search_request()
+        response = requests.post(url=search_request.uri, data=search_request.body)
+
+        if not response.ok:
+            handle_http_error(response)
+
+        return response
