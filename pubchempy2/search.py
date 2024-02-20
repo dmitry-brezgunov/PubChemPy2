@@ -4,7 +4,7 @@ from urllib.parse import quote
 from pydantic import model_validator
 
 from .abstract import AbstractSearch, SearchParams
-from .types import assay_types, compound_property_types, fast_search_args, fast_search_types, xref_types, xrefs_types
+from .literals import assay_types, compound_property_types, fast_search_args, fast_search_types, xref_types, xrefs_types
 from .validators import XrefValidators
 
 

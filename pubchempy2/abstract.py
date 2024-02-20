@@ -5,7 +5,7 @@ import requests
 from pydantic import BaseModel, Field, HttpUrl
 
 from .errors import handle_http_error
-from .types import output_types
+from .literals import output_types
 
 
 class SearchParams(BaseModel):
