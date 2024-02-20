@@ -3,8 +3,9 @@ from typing import Annotated, ClassVar
 
 import requests
 from pydantic import BaseModel, Field, HttpUrl
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_fixed
 
-from .errors import handle_http_error
+from .errors import SeverBusyError, handle_http_error
 from .literals import output_types
 
 
@@ -33,6 +34,7 @@ class AbstractSearch(BaseModel, ABC):
     def _construct_search_request(self) -> SearchParams:
         pass
 
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(5), retry=retry_if_exception(SeverBusyError))
     def search(self) -> requests.Response:
         search_request = self._construct_search_request()
         response = requests.post(url=search_request.uri, data=search_request.body)
